@@ -1,0 +1,654 @@
+public class SmoothWaveAxisDrawable extends Drawable {
+    private final Paint paint = new Paint();
+    private final RectF boundRectF = new RectF();
+    private final Rect axisArea = new Rect();
+    private final DashPathEffect dashEffect = new DashPathEffect(new float[]{10, 10}, 0);
+    private final int textColor = Color.GRAY;
+
+    private final List<Float> dataPositionX = new ArrayList<>();
+    private final List<Float> dataPositionY = new ArrayList<>();
+    /**
+     * 画面上要展示的X坐标轴范围(基于原始数据)
+     */
+    private Range<Float> axisXRange;
+    /**
+     * 画面上要展示的Y坐标轴范围(基于原始数据)
+     */
+    private Range<Float> axisYRange;
+
+    private List<Pair<String, Float>> originDataX;
+    private List<Pair<String, Float>> originDataY;
+
+    @IntRange(from = -1)
+    private int focusIndex = -1;
+
+    public SmoothWaveAxisDrawable() {
+        paint.setAntiAlias(true);
+        paint.setStrokeWidth(2);
+    }
+
+    @Override
+    public void draw(Canvas canvas) {
+        if (originDataX == null || originDataX.isEmpty()) {
+            return;
+        }
+        if (originDataY == null || originDataY.isEmpty()) {
+            return;
+        }
+        if (axisXRange == null || axisYRange == null) {
+            return;
+        }
+        boundRectF.set(getBounds());
+        int layoutId = canvas.saveLayer(boundRectF, paint, Canvas.ALL_SAVE_FLAG);
+        canvas.translate(axisArea.left, axisArea.top);
+
+        convertData();
+        drawAxisXLine(canvas);
+        drawAxisXText(canvas);
+        drawAssistLines(canvas);
+        drawAxisYText(canvas);
+
+        canvas.restoreToCount(layoutId);
+    }
+
+    private void convertData() {
+        dataPositionX.clear();
+        dataPositionY.clear();
+        if (originDataX != null && !originDataX.isEmpty() && axisXRange != null) {
+            float scaleX = axisArea.width() / (axisXRange.getUpper() - axisXRange.getLower());
+
+            for (Pair<String, Float> item : originDataX) {
+                float originData = item.second;
+                float pixelData = (originData - axisXRange.getLower()) * scaleX;
+                dataPositionX.add(pixelData);
+            }
+        }
+        if (originDataY != null && !originDataY.isEmpty() && axisYRange != null) {
+            float scaleY = axisArea.height() / (axisYRange.getUpper() - axisYRange.getLower());
+
+            for (Pair<String, Float> item : originDataY) {
+                float originData = item.second;
+                float pixelData = (originData - axisYRange.getLower()) * scaleY;
+                pixelData = axisArea.height() - pixelData;
+                dataPositionY.add(pixelData);
+            }
+        }
+    }
+
+    private void drawAxisXLine(Canvas canvas) { // 画X轴线
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setColor(textColor);
+        int offsetX = getBounds().left - axisArea.left;
+        canvas.drawLine(offsetX, axisArea.bottom, getBounds().width(), axisArea.bottom, paint);
+    }
+
+    private void drawAxisXText(Canvas canvas) { // 画X轴文字
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(textColor);
+        float textSize = getBounds().width() * 0.03f;
+        paint.setTextSize(textSize);
+        paint.setTextAlign(Paint.Align.CENTER);
+        int paddingBottom = getBounds().bottom - axisArea.bottom;
+        float offsetY = Math.min(textSize * 1.3f, (paddingBottom - textSize) / 2 + textSize);
+        for (int i = 0; i < dataPositionX.size(); i++) {
+            Float pixelX = dataPositionX.get(i);
+            if (pixelX < 0 || pixelX > axisArea.width()) {
+                continue;
+            }
+            canvas.drawText(originDataX.get(i).first, pixelX, axisArea.height() + offsetY, paint);
+        }
+    }
+
+    private void drawAxisYText(Canvas canvas) { // 画Y轴文字
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(textColor);
+        float textSize = getBounds().width() * 0.03f;
+        paint.setTextSize(textSize);
+        paint.setTextAlign(Paint.Align.LEFT);
+        int offsetX = getBounds().left - axisArea.left;
+        for (int i = 0; i < dataPositionY.size(); i++) {
+            Float pixelY = dataPositionY.get(i);
+            if (pixelY < 0 || pixelY > axisArea.height()) {
+                continue;
+            }
+            canvas.drawText(originDataY.get(i).first, offsetX, pixelY + textSize / 2f, paint);
+        }
+    }
+
+    private void drawAssistLines(Canvas canvas) { // 画辅助线
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setColor(textColor);
+        for (int i = 0; i < dataPositionX.size(); i++) {
+            Float pixelX = dataPositionX.get(i);
+            if (pixelX < 0 || pixelX > axisArea.width()) {
+                continue;
+            }
+            if (focusIndex == i) {
+                paint.setPathEffect(null);
+            } else {
+                paint.setPathEffect(dashEffect);
+            }
+            canvas.drawLine(pixelX, 0, pixelX, axisArea.height(), paint);
+        }
+        paint.setPathEffect(null);
+    }
+
+    @Override
+    public void setAlpha(int alpha) {
+
+    }
+
+    @Override
+    public void setColorFilter(ColorFilter colorFilter) {
+
+    }
+
+    @Override
+    public int getOpacity() {
+        return PixelFormat.TRANSLUCENT;
+    }
+
+    public void setFocusIndex(@IntRange(from = -1) int focusIndex) {
+        this.focusIndex = focusIndex;
+    }
+
+    public void setAxisArea(Rect axisArea) {
+        this.axisArea.set(axisArea);
+    }
+
+    public void setOriginDataX(List<Pair<String, Float>> originData) {
+        this.originDataX = originData;
+        invalidateSelf();
+    }
+
+    public void setOriginDataY(List<Pair<String, Float>> originData) {
+        this.originDataY = originData;
+        invalidateSelf();
+    }
+
+    public void setAxisXRange(Range<Float> axisXRange) {
+        this.axisXRange = axisXRange;
+        invalidateSelf();
+    }
+
+    public void setAxisYRange(Range<Float> axisYRange) {
+        this.axisYRange = axisYRange;
+        invalidateSelf();
+    }
+
+    public Range<Float> getAxisXRange() {
+        return axisXRange;
+    }
+
+    public Range<Float> getAxisYRange() {
+        return axisYRange;
+    }
+}
+
+public class SmoothWaveDrawable extends Drawable {
+    public static final int MASK_HEX_2 = 0xff;
+    public static final int MASK_HEX_6 = 0xffffff;
+    public static final int BIN_LENGTH_24 = 24;
+    private static final float SLOP_RATE = 0.4f;
+    private final Paint paint = new Paint();
+    private final Path path = new Path();
+    private final Path wavePath = new Path();
+    private final RectF boundRectF = new RectF();
+    /**
+     * 要展示的数据(需要基于原始数据经过转换,基于当前drawable上的像素点坐标系)
+     */
+    private List<PointF> showData;
+    private ArrayMap<PointF, Pair<PointF, PointF>> assistPointData;
+    /**
+     * 外部输入的原始数据
+     */
+    private List<PointF> originData;
+    /**
+     * 画面上要展示的X坐标轴范围(基于原始数据)
+     */
+    private Range<Float> axisXRange;
+    /**
+     * 画面上要展示的Y坐标轴范围(基于原始数据)
+     */
+    private Range<Float> axisYRange;
+    private float minDataY = 0;
+    private float maxDataY = 600;
+
+    /**
+     * 波形渐变色的各节点透明度
+     */
+    @FloatRange(from = 0f, to = 1.0f)
+    private final float[] waveAlphas = new float[]{0.10f, 0.016f};
+
+    /**
+     * 波形渐变色的各节点所在位置百分比
+     */
+    private final float[] waveColorPositions = new float[]{0, 1f};
+
+    /**
+     * 波形渐变色的各节点色值(需要通过waveColorStart和waveAlphas计算出来)
+     */
+    @ColorInt
+    private final int[] waveColors = new int[waveAlphas.length];
+
+    /**
+     * 焦点圆点前景色透明度(圆点小圈)
+     */
+    @FloatRange(from = 0f, to = 1.0f)
+    private final float focusDotAlpha = 1.0f;
+
+    /**
+     * 焦点圆点背景色透明度(圆点大圈)
+     */
+    @FloatRange(from = 0f, to = 1.0f)
+    private final float focusDotBgAlpha = 0.3f;
+
+    /**
+     * 是否画出辅助点(仅调试用)
+     */
+    private final boolean isShowAssistDot = false;
+
+    /**
+     * 调试点颜色(仅调试用)
+     */
+    @ColorInt
+    private final int assistColor = Color.GREEN;
+
+    @IntRange(from = -1)
+    private int focusIndex = -1;
+
+    /**
+     * 波线条宽度
+     */
+    private int lineStrokeWidth = 6;
+
+    /**
+     * 波线条颜色
+     */
+    @ColorInt
+    private int lineColor = Color.RED;
+
+    /**
+     * 波形起始色
+     */
+    @ColorInt
+    private int waveColorStart = Color.RED;
+
+    public SmoothWaveDrawable() {
+        paint.setAntiAlias(true);
+        setWaveColorStart(waveColorStart);
+        setLineColor(lineColor);
+    }
+
+    private void convertData() {
+        if (originData == null || originData.isEmpty() || axisXRange == null || axisYRange == null) {
+            showData = Collections.emptyList();
+            return;
+        }
+        int width = getBounds().width();
+        int height = getBounds().height() - lineStrokeWidth;
+        float scaleX = width / (axisXRange.getUpper() - axisXRange.getLower()); // 原始数据X轴每1个单位占几个像素点
+        float scaleY = height / (axisYRange.getUpper() - axisYRange.getLower()); // 原始数据Y轴每1个单位占几个像素点
+        showData = new ArrayList<>();
+        for (PointF pointF : originData) {
+            float pixelX = (pointF.x - axisXRange.getLower()) * scaleX;
+            float pixelY = (pointF.y - axisYRange.getLower()) * scaleY;
+            pixelY = height - pixelY + lineStrokeWidth / 2f;
+            showData.add(new PointF(pixelX, pixelY));
+        }
+        assistPointData = calAssistPoints(showData);
+        if (showData != null && !showData.isEmpty()) {
+            minDataY = showData.stream().map(it -> it.y).min(Float::compare).orElse(0f);
+            maxDataY = showData.stream().map(it -> it.y).max(Float::compare).orElse(maxDataY);
+        }
+    }
+
+    @Override
+    public void draw(Canvas canvas) {
+        convertData();
+        if (showData == null || showData.isEmpty()) {
+            return;
+        }
+        if (assistPointData == null || assistPointData.isEmpty()) {
+            return;
+        }
+        boundRectF.set(getBounds());
+        int layoutId = canvas.saveLayer(boundRectF, paint, Canvas.ALL_SAVE_FLAG);
+        canvas.translate(getBounds().left, getBounds().top);
+
+        path.reset();
+        path.moveTo(showData.get(0).x, showData.get(0).y);
+
+        wavePath.reset();
+        wavePath.moveTo(0, getBounds().height());
+        wavePath.lineTo(0, showData.get(0).y);
+        wavePath.lineTo(showData.get(0).x, showData.get(0).y);
+
+        for (int i = 0; i < showData.size() - 1; i++) {
+            PointF currP = showData.get(i);
+            PointF nextP = showData.get(i + 1);
+            PointF assistP1 = assistPointData.get(currP).second;
+            PointF assistP2 = assistPointData.get(nextP).first;
+            path.cubicTo(assistP1.x, assistP1.y, assistP2.x, assistP2.y, nextP.x, nextP.y);
+            wavePath.cubicTo(assistP1.x, assistP1.y, assistP2.x, assistP2.y, nextP.x, nextP.y);
+
+            if (isShowAssistDot) { // 画"三次贝塞尔曲线"的辅助点,调试找bug专用
+                paint.setStyle(Paint.Style.FILL);
+                paint.setStrokeWidth(lineStrokeWidth);
+                paint.setColor(assistColor);
+                canvas.drawCircle(currP.x, currP.y, lineStrokeWidth * 2, paint);
+                canvas.drawCircle(assistP1.x, assistP1.y, lineStrokeWidth * 2, paint);
+                canvas.drawCircle(assistP2.x, assistP2.y, lineStrokeWidth * 2, paint);
+                canvas.drawLine(currP.x, currP.y, assistP1.x, assistP1.y, paint);
+                canvas.drawLine(assistP2.x, assistP2.y, nextP.x, nextP.y, paint);
+            }
+        }
+
+        wavePath.lineTo(showData.get(showData.size() - 1).x, getBounds().height());
+        wavePath.close();
+        paint.setStyle(Paint.Style.FILL);
+        paint.setShader(new LinearGradient(0, minDataY, 0, getBounds().height() * 0.8f, waveColors,
+            waveColorPositions, Shader.TileMode.CLAMP));
+        canvas.drawPath(wavePath, paint); // 画出波形下方和X轴之间的填充色
+        paint.setShader(null);
+
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(lineStrokeWidth);
+        paint.setColor(lineColor);
+        canvas.drawPath(path, paint); // 画出波形线条
+
+        if (focusIndex >= 0 && focusIndex < showData.size()) {
+            int lineAlphaInt = (lineColor >> BIN_LENGTH_24) & MASK_HEX_2;
+            int lineBaseColor = lineColor & MASK_HEX_6;
+            int focusDotFgAlphaInt = (int) (lineAlphaInt * focusDotAlpha + 0.5f);
+            int focusDotBgAlphaInt = (int) (lineAlphaInt * focusDotBgAlpha + 0.5f);
+            int focusDotFgColor = ((focusDotFgAlphaInt & MASK_HEX_2) << BIN_LENGTH_24) + lineBaseColor;
+            int focusDotBgColor = ((focusDotBgAlphaInt & MASK_HEX_2) << BIN_LENGTH_24) + lineBaseColor;
+
+            PointF focusP = showData.get(focusIndex);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(focusDotBgColor);
+            canvas.drawCircle(focusP.x, focusP.y, lineStrokeWidth * 4, paint);
+
+            paint.setColor(focusDotFgColor);
+            canvas.drawCircle(focusP.x, focusP.y, lineStrokeWidth * 2, paint);
+        }
+
+        canvas.restoreToCount(layoutId);
+    }
+
+    @Override
+    public void setAlpha(int alpha) {
+
+    }
+
+    @Override
+    public void setColorFilter(ColorFilter colorFilter) {
+
+    }
+
+    @Override
+    public int getOpacity() {
+        return PixelFormat.TRANSLUCENT;
+    }
+
+    public void setLineColor(int lineColor) {
+        this.lineColor = lineColor;
+        invalidateSelf();
+    }
+
+    public void setWaveColorStart(@ColorInt int waveColorStart) {
+        this.waveColorStart = waveColorStart;
+        int alphaInt = (waveColorStart >> BIN_LENGTH_24) & MASK_HEX_2;
+        if (alphaInt == 0) {
+            alphaInt = 255;
+        }
+        int baseColorInt = waveColorStart & MASK_HEX_6;
+        for (int i = 0; i < waveColors.length; i++) {
+            int alpha = (int) (alphaInt * waveAlphas[i] + 0.5f);
+            waveColors[i] = ((alpha & MASK_HEX_2) << BIN_LENGTH_24) + baseColorInt;
+        }
+        invalidateSelf();
+    }
+
+    public void setFocusIndex(@IntRange(from = -1) int focusIndex) {
+        this.focusIndex = focusIndex;
+    }
+
+    private static ArrayMap<PointF, Pair<PointF, PointF>> calAssistPoints(List<PointF> baseDots) {
+        if (baseDots == null || baseDots.isEmpty()) {
+            return new ArrayMap<>(0);
+        }
+        ArrayMap<PointF, Pair<PointF, PointF>> result = new ArrayMap<>();
+        for (int i = 0; i < baseDots.size(); i++) {
+            float slop = getAssistPointSlop(baseDots, i); // 当前基准点及其左右两个基准点3点一线的目标斜率
+            PointF curr = baseDots.get(i); // 当前基准点
+            PointF pre = i <= 0 ? null : baseDots.get(i - 1); // 前一个基准点
+            PointF next = i >= baseDots.size() - 1 ? null : baseDots.get(i + 1); // 下一个基准点
+            PointF leftAssistPoint = null; // 当前基准点左边的辅助点
+            PointF rightAssistPoint = null; // 当前基准点右边的辅助点
+
+            float leftAssistX = curr.x; // 当前基准点左边辅助点的X坐标
+            float leftAssistY = curr.y; // 当前基准点左边辅助点的Y坐标
+            if (pre != null) {
+                leftAssistX = curr.x - (curr.x - pre.x) * SLOP_RATE;
+                leftAssistY = curr.y - slop * (curr.x - leftAssistX);
+            }
+            leftAssistPoint = new PointF(leftAssistX, leftAssistY);
+
+            float rightAssistX = curr.x; // 当前基准点右边辅助点的X坐标
+            float rightAssistY = curr.y; // 当前基准点右边辅助点的Y坐标
+            if (next != null) {
+                rightAssistX = curr.x + (next.x - curr.x) * SLOP_RATE;
+                rightAssistY = curr.y + slop * (rightAssistX - curr.x);
+            }
+            rightAssistPoint = new PointF(rightAssistX, rightAssistY);
+
+            result.put(new PointF(curr.x, curr.y), new Pair<>(leftAssistPoint, rightAssistPoint));
+        }
+        return result;
+    }
+
+    /**
+     * 获取一个基准点(数据点)左右两个辅助点的斜率
+     *
+     * @param baseDots 基准点列表
+     * @param index 当前求斜率的点序号
+     * @return 斜率,从左上到右下走向的线段斜率为正;从左下到右上走向的线段斜率为负.
+     */
+    private static float getAssistPointSlop(List<PointF> baseDots, int index) {
+//        return 0;
+        if (baseDots == null || baseDots.isEmpty()) {
+            return 0;
+        }
+        if (index <= 0 || index >= baseDots.size() - 1) {
+            return 0;
+        }
+        PointF prePoint = baseDots.get(index - 1);
+        PointF nextPoint = baseDots.get(index + 1);
+        PointF currPoint = baseDots.get(index);
+        if ((prePoint.y <= currPoint.y && nextPoint.y <= currPoint.y)
+            || (prePoint.y >= currPoint.y && nextPoint.y >= currPoint.y)) {
+            return 0;
+        }
+        return (nextPoint.y - prePoint.y) / (nextPoint.x - prePoint.x);
+    }
+
+    /**
+     * 设置数据
+     *
+     * @param points 数据点
+     * @param axisXRange 要展示的X轴范围
+     * @param axisYRange 要展示的Y轴范围
+     */
+    public void setData(List<PointF> points, Range<Float> axisXRange, Range<Float> axisYRange) {
+        this.originData = points;
+        this.axisXRange = axisXRange;
+        this.axisYRange = axisYRange;
+        invalidateSelf();
+    }
+
+    public void setOriginData(List<PointF> originData) {
+        this.originData = originData;
+        invalidateSelf();
+    }
+
+    public void setAxisXRange(Range<Float> axisXRange) {
+        this.axisXRange = axisXRange;
+        invalidateSelf();
+    }
+
+    public void setAxisYRange(Range<Float> axisYRange) {
+        this.axisYRange = axisYRange;
+        invalidateSelf();
+    }
+
+    public Range<Float> getAxisXRange() {
+        return axisXRange;
+    }
+
+    public Range<Float> getAxisYRange() {
+        return axisYRange;
+    }
+}
+
+public class SmoothWaveView extends View {
+    /**
+     * 坐标区域上下左右边距占View宽或者高的百分比
+     */
+    private final RectF axisAreaPaddingPercent = new RectF(0.1f, 0f, 0.1f, 0.12f);
+    /**
+     * 坐标区域(像素单位)
+     */
+    private final Rect axisArea = new Rect();
+    private SmoothWaveAxisDrawable axisDrawable;
+    private List<SmoothWaveDrawable> waveDrawables;
+
+    public SmoothWaveView(Context context) {
+        super(context);
+        init();
+    }
+
+    public SmoothWaveView(Context context, AttributeSet attrs) {
+        super(context, attrs);
+        init();
+    }
+
+    public SmoothWaveView(Context context, AttributeSet attrs, int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        init();
+    }
+
+    public SmoothWaveView(Context context, AttributeSet attrs, int defStyleAttr, int defStyleRes) {
+        super(context, attrs, defStyleAttr, defStyleRes);
+        init();
+    }
+
+    /**
+     * 释放资源.防止内存泄漏.界面销毁的时候调用.
+     */
+    public void release() {
+        if (axisDrawable != null) {
+            axisDrawable.setCallback(null);
+            axisDrawable = null;
+        }
+
+        if (waveDrawables != null) {
+            for (Drawable drawable : waveDrawables) {
+                if (drawable != null) {
+                    drawable.setCallback(null);
+                }
+            }
+            waveDrawables.clear();
+            waveDrawables = null;
+        }
+    }
+
+    private void init() {
+        /****************测试数据******************/
+        axisDrawable = new SmoothWaveAxisDrawable();
+        axisDrawable.setAxisXRange(new Range<>(0f, 4f));
+        axisDrawable.setAxisYRange(new Range<>(0f, 22f));
+        List<Pair<String, Float>> axisXData = new ArrayList<>();
+        axisXData.add(new Pair<String, Float>("4/1-4/7", 0f));
+        axisXData.add(new Pair<String, Float>("4/8-4/14", 1f));
+        axisXData.add(new Pair<String, Float>("4/15-4/21", 2f));
+        axisXData.add(new Pair<String, Float>("4/22-4/28", 3f));
+        axisXData.add(new Pair<String, Float>("4/29-5/4", 4f));
+        axisDrawable.setOriginDataX(axisXData);
+        List<Pair<String, Float>> axisYData = new ArrayList<>();
+        axisYData.add(new Pair<String, Float>("5", 5f));
+        axisYData.add(new Pair<String, Float>("10", 10f));
+        axisYData.add(new Pair<String, Float>("15", 15f));
+        axisYData.add(new Pair<String, Float>("20", 20f));
+        axisDrawable.setOriginDataY(axisYData);
+        axisDrawable.setFocusIndex(2);
+        axisDrawable.setCallback(this);
+
+        waveDrawables = new ArrayList<>();
+
+        SmoothWaveDrawable waveDrawable1 = new SmoothWaveDrawable();
+        List<PointF> data = new ArrayList<>();
+        data.add(new PointF(0f, 0f));
+        data.add(new PointF(1f, 4f));
+        data.add(new PointF(2f, 9f));
+        data.add(new PointF(3f, 0f));
+        data.add(new PointF(4f, 13f));
+        waveDrawable1.setOriginData(data);
+        waveDrawable1.setAxisXRange(new Range<>(0f, 4f));
+        waveDrawable1.setAxisYRange(new Range<>(0f, 22f));
+        waveDrawable1.setFocusIndex(2);
+        waveDrawable1.setLineColor(Color.RED);
+        waveDrawable1.setWaveColorStart(Color.RED);
+        waveDrawables.add(waveDrawable1);
+        waveDrawable1.setCallback(this);
+
+        SmoothWaveDrawable waveDrawable2 = new SmoothWaveDrawable();
+        List<PointF> data2 = new ArrayList<>();
+        data2.add(new PointF(0f, 0f));
+        data2.add(new PointF(1f, 12f));
+        data2.add(new PointF(2f, 2f));
+        data2.add(new PointF(3f, 0f));
+        data2.add(new PointF(4f, 0f));
+        waveDrawable2.setOriginData(data2);
+        waveDrawable2.setAxisXRange(new Range<>(0f, 4f));
+        waveDrawable2.setAxisYRange(new Range<>(0f, 22f));
+        waveDrawable2.setFocusIndex(2);
+        waveDrawable2.setLineColor(Color.BLUE);
+        waveDrawable2.setWaveColorStart(Color.BLUE);
+        waveDrawables.add(waveDrawable2);
+        /****************测试数据******************/
+    }
+
+    @Override
+    public void invalidateDrawable(Drawable drawable) {
+        super.invalidateDrawable(drawable);
+        invalidate();
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        initAxisArea();
+        if (axisDrawable != null) {
+            axisDrawable.setBounds(0, 0, getWidth(), getHeight());
+            axisDrawable.setAxisArea(axisArea);
+            axisDrawable.draw(canvas);
+        }
+        if (waveDrawables != null && !waveDrawables.isEmpty()) {
+            for (SmoothWaveDrawable drawable : waveDrawables) {
+                drawable.setBounds(axisArea);
+                drawable.draw(canvas);
+            }
+        }
+    }
+
+    private void initAxisArea() {
+        int width = getWidth();
+        int height = getHeight();
+        axisArea.left = (int) (width * axisAreaPaddingPercent.left + 0.5f);
+        axisArea.top = (int) (height * axisAreaPaddingPercent.top + 0.5f);
+        axisArea.right = (int) (width * (1 - axisAreaPaddingPercent.right) + 0.5f);
+        axisArea.bottom = (int) (height * (1 - axisAreaPaddingPercent.bottom) + 0.5f);
+    }
+}
